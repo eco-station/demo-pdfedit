@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF注釈ツール</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #f5f5f5;
+            --text-color: #333;
+            --border-color: #ccc;
+            --danger-color: #e74c3c;
+            --blue-color: #007bff;
+            --red-color: #dc3545;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: #fff;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            z-index: 10;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+        }
+
+        .description {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        /* Main Layout */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Drop Zone */
+        #drop-zone {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            border: 3px dashed var(--primary-color);
+            box-sizing: border-box;
+            transition: opacity 0.3s;
+        }
+
+        #drop-zone.hidden {
+            display: none;
+        }
+
+        #drop-zone p {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+
+        .file-input-label {
+            padding: 10px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .file-input-label:hover {
+            background-color: #357abd;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        /* PDF Viewer Area */
+        #viewer-container {
+            flex: 1;
+            overflow: auto;
+            background-color: #525659;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        #pdf-wrapper {
+            position: relative;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+            background-color: white;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #annotation-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: auto;
+            /* Allow clicks */
+            cursor: crosshair;
+        }
+
+        /* Annotations */
+        .dot {
+            position: absolute;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            z-index: 10;
+            transition: transform 0.1s;
+        }
+
+        /* Increase hit area for easier selection */
+        .dot::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: calc(100% + 20px);
+            height: calc(100% + 20px);
+            border-radius: 50%;
+        }
+
+        .dot:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .dot.blue {
+            background-color: var(--blue-color);
+        }
+
+        .dot.red {
+            background-color: var(--red-color);
+        }
+
+        .dot.selected {
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5), 0 0 0 1px white inset;
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .dot.small {
+            width: 8px;
+            height: 8px;
+        }
+
+        .dot.medium {
+            width: 14px;
+            height: 14px;
+        }
+
+        .dot.large {
+            width: 20px;
+            height: 20px;
+        }
+
+        .annotation-text-container {
+            position: absolute;
+            transform: translate(10px, -50%);
+            /* Position to the right of the dot */
+            z-index: 11;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 5px;
+            border-radius: 4px;
+            pointer-events: none;
+            /* Let clicks pass through to input if needed, but mainly for display */
+            white-space: nowrap;
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 0 0 2px white;
+        }
+
+        .annotation-text-container.blue {
+            color: var(--blue-color);
+        }
+
+        .annotation-text-container.red {
+            color: var(--red-color);
+        }
+
+        .annotation-input-container {
+            position: absolute;
+            z-index: 100;
+            display: flex;
+            gap: 5px;
+            background: white;
+            padding: 5px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--primary-color);
+        }
+
+        .annotation-input {
+            font-size: 14px;
+            padding: 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            outline: none;
+            min-width: 150px;
+        }
+
+        .delete-btn {
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .delete-btn:hover {
+            background-color: #c0392b;
+        }
+
+        /* Controls Footer */
+        footer {
+            background-color: #fff;
+            padding: 10px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        button {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            background-color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        button:hover {
+            background-color: #f0f0f0;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        select,
+        input[type="radio"] {
+            cursor: pointer;
+        }
+
+        .radio-label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+
+        .color-sample {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .color-sample.blue {
+            background-color: var(--blue-color);
+        }
+
+        .color-sample.red {
+            background-color: var(--red-color);
+        }
+
+        /* Print Styles */
+        @media print {
+            @page {
+                size: auto;
+                margin: 0;
+            }
+
+            body {
+                height: auto;
+                overflow: visible;
+                background-color: white;
+            }
+
+            header,
+            footer,
+            #drop-zone,
+            .delete-btn,
+            .annotation-input-container {
+                display: none !important;
+            }
+
+            main {
+                display: block;
+                overflow: visible;
+            }
+
+            #viewer-container {
+                padding: 0;
+                background-color: white;
+                overflow: visible;
+                display: block;
+            }
+
+            #pdf-wrapper {
+                box-shadow: none;
+                margin: 0;
+                width: 100% !important;
+            }
+
+            /* Ensure background colors (dots) are printed */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+    </style>
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- pdf-lib CDN -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+</head>
+
+<body>
+
+    <header>
+        <div>
+            <h1>PDF注釈ツール</h1>
+            <span class="description">PDF上に点とコメントを追加できます</span>
+        </div>
+    </header>
+
+    <main>
+        <div id="drop-zone">
+            <p>ここにPDFをドラッグ&ドロップしてください</p>
+            <p>または</p>
+            <label class="file-input-label">
+                ファイルを選択
+                <input type="file" id="file-input" accept="application/pdf">
+            </label>
+        </div>
+
+        <div id="viewer-container">
+            <div id="pdf-wrapper">
+                <canvas id="the-canvas"></canvas>
+                <div id="annotation-layer"></div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="control-group">
+            <div class="control-item">
+                <button id="prev-page">前へ</button>
+                <span id="page-info">ページ <span id="page-num">--</span> / <span id="page-count">--</span></span>
+                <button id="next-page">次へ</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <div class="control-item">
+                <span>サイズ:</span>
+                <label class="radio-label"><input type="radio" name="dot-size" value="small"> 小</label>
+                <label class="radio-label"><input type="radio" name="dot-size" value="medium" checked> 中</label>
+                <label class="radio-label"><input type="radio" name="dot-size" value="large"> 大</label>
+            </div>
+            <div class="control-item" style="border-left: 1px solid #ccc; padding-left: 15px;">
+                <span>色:</span>
+                <label class="radio-label"><input type="radio" name="dot-color" value="blue" checked> <span
+                        class="color-sample blue"></span> 青</label>
+                <label class="radio-label"><input type="radio" name="dot-color" value="red"> <span
+                        class="color-sample red"></span> 赤</label>
+            </div>
+            <div class="control-item" style="border-left: 1px solid #ccc; padding-left: 15px;">
+                <label class="radio-label" style="font-weight: bold; color: var(--text-color);">
+                    <input type="checkbox" id="graph-mode"> グラフモード (点を選択)
+                </label>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <button id="download-pdf" style="background-color: var(--primary-color); color: white; border: none;">
+                PDFをダウンロード
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        // PDF.js Worker Configuration
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // State Management
+        const state = {
+            pdfDoc: null,
+            pageNum: 1,
+            pageRendering: false,
+            pageNumPending: null,
+            scale: 1.0,
+            annotations: [], // Array of { id, page, x, y, color, size, text }
+            currentSettings: {
+                size: 'medium',
+                color: 'blue'
+            },
+            isGraphMode: false,
+            selectedDotIds: new Set()
+        };
+
+        // DOM Elements
+        const canvas = document.getElementById('the-canvas');
+        const ctx = canvas.getContext('2d');
+        const annotationLayer = document.getElementById('annotation-layer');
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const pageNumSpan = document.getElementById('page-num');
+        const pageCountSpan = document.getElementById('page-count');
+        const prevPageBtn = document.getElementById('prev-page');
+        const nextPageBtn = document.getElementById('next-page');
+        const graphModeCheckbox = document.getElementById('graph-mode');
+        const downloadPdfBtn = document.getElementById('download-pdf');
+
+        // --- Initialization & Event Listeners ---
+
+        // File Input
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && file.type === 'application/pdf') {
+                loadPdf(file);
+            }
+        });
+
+        // Drag & Drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.backgroundColor = 'rgba(230, 240, 255, 0.9)';
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+            const file = e.dataTransfer.files[0];
+            if (file && file.type === 'application/pdf') {
+                loadPdf(file);
+            } else {
+                alert('PDFファイルをドロップしてください。');
+            }
+        });
+
+        // Navigation
+        prevPageBtn.addEventListener('click', onPrevPage);
+        nextPageBtn.addEventListener('click', onNextPage);
+
+        // Settings
+        document.querySelectorAll('input[name="dot-size"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                state.currentSettings.size = e.target.value;
+            });
+        });
+
+        document.querySelectorAll('input[name="dot-color"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                state.currentSettings.color = e.target.value;
+            });
+        });
+
+        // Graph Mode Toggle
+        if (graphModeCheckbox) {
+            graphModeCheckbox.addEventListener('change', (e) => {
+                state.isGraphMode = e.target.checked;
+                renderAnnotations(); // Re-render to update UI (selection styles, lines)
+            });
+        }
+
+        // Download PDF
+        downloadPdfBtn.addEventListener('click', downloadPdf);
+
+        // Annotation Creation (Click on Layer)
+        annotationLayer.addEventListener('click', (e) => {
+            // Ignore if clicking on an existing dot or input
+            if (e.target !== annotationLayer && e.target.tagName !== 'svg') return;
+
+            // If in graph mode, do NOT add new dots (user should focus on selecting)
+            if (state.isGraphMode) return;
+
+            const rect = annotationLayer.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            addAnnotation(x, y);
+        });
+
+        // --- PDF Logic ---
+
+        function loadPdf(file) {
+            const fileReader = new FileReader();
+            fileReader.onload = function () {
+                const typedarray = new Uint8Array(this.result);
+                // Store buffer for download
+                state.pdfBuffer = this.result.slice(0); // Clone it just in case
+
+                pdfjsLib.getDocument(typedarray).promise.then((pdfDoc_) => {
+                    state.pdfDoc = pdfDoc_;
+                    pageCountSpan.textContent = state.pdfDoc.numPages;
+                    state.pageNum = 1;
+                    state.annotations = []; // Reset annotations for new file
+                    state.selectedDotIds.clear();
+
+                    dropZone.classList.add('hidden');
+                    renderPage(state.pageNum);
+                }).catch(err => {
+                    console.error('Error loading PDF:', err);
+                    alert('PDFの読み込みに失敗しました。');
+                });
+            };
+            fileReader.readAsArrayBuffer(file);
+        }
+
+        function renderPage(num) {
+            state.pageRendering = true;
+
+            // Fetch page
+            state.pdfDoc.getPage(num).then((page) => {
+                // Adjust scale to fit container width (with some padding)
+                const containerWidth = document.getElementById('viewer-container').clientWidth - 40;
+                const unscaledViewport = page.getViewport({ scale: 1 });
+                const scale = containerWidth / unscaledViewport.width;
+                state.scale = scale < 1 ? 1 : scale;
+                const viewport = page.getViewport({ scale: state.scale });
+
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                // Update annotation layer dimensions to match canvas
+                annotationLayer.style.width = `${viewport.width}px`;
+                annotationLayer.style.height = `${viewport.height}px`;
+
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+                const renderTask = page.render(renderContext);
+
+                // Wait for render to finish
+                renderTask.promise.then(() => {
+                    state.pageRendering = false;
+                    pageNumSpan.textContent = num;
+
+                    // Draw annotations for this page
+                    renderAnnotations();
+
+                    if (state.pageNumPending !== null) {
+                        renderPage(state.pageNumPending);
+                        state.pageNumPending = null;
+                    }
+                });
+            });
+
+            // Update page counters
+            pageNumSpan.textContent = num;
+
+            // Update button states
+            prevPageBtn.disabled = num <= 1;
+            nextPageBtn.disabled = num >= state.pdfDoc.numPages;
+        }
+
+        function queueRenderPage(num) {
+            if (state.pageRendering) {
+                state.pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+
+        function onPrevPage() {
+            if (state.pageNum <= 1) return;
+            state.pageNum--;
+            queueRenderPage(state.pageNum);
+        }
+
+        function onNextPage() {
+            if (state.pageNum >= state.pdfDoc.numPages) return;
+            state.pageNum++;
+            queueRenderPage(state.pageNum);
+        }
+
+        // --- Annotation Logic ---
+
+        function addAnnotation(x, y) {
+            const id = Date.now().toString();
+            const annotation = {
+                id: id,
+                page: state.pageNum,
+                x: x,
+                xPct: x / canvas.width,
+                yPct: y / canvas.height,
+                color: state.currentSettings.color,
+                size: state.currentSettings.size,
+                text: ''
+            };
+
+            state.annotations.push(annotation);
+            renderAnnotations(); // Re-render all to ensure correct z-index or order
+        }
+
+        function renderAnnotations() {
+            // Clear existing annotations
+            annotationLayer.innerHTML = '';
+
+            // Filter annotations for current page
+            const pageAnnotations = state.annotations.filter(a => a.page === state.pageNum);
+
+            // 1. Draw Graph Lines (SVG) first so they are behind dots
+            if (state.selectedDotIds && state.selectedDotIds.size > 1) {
+                const svgNS = "http://www.w3.org/2000/svg";
+                const svg = document.createElementNS(svgNS, "svg");
+                svg.style.position = "absolute";
+                svg.style.top = "0";
+                svg.style.left = "0";
+                svg.style.width = "100%";
+                svg.style.height = "100%";
+                svg.style.pointerEvents = "none"; // Let clicks pass through
+
+                // Draw lines for each color
+                ['blue', 'red'].forEach(color => {
+                    // Get selected annotations of this color on this page
+                    const selectedOnPage = pageAnnotations.filter(a => state.selectedDotIds.has(a.id) && a.color === color);
+
+                    // Sort by X coordinate
+                    selectedOnPage.sort((a, b) => a.xPct - b.xPct);
+
+                    if (selectedOnPage.length > 1) {
+                        const polyline = document.createElementNS(svgNS, "polyline");
+                        const points = selectedOnPage.map(a => {
+                            const x = a.xPct * canvas.width;
+                            const y = a.yPct * canvas.height;
+                            return `${x},${y}`;
+                        }).join(" ");
+
+                        polyline.setAttribute("points", points);
+                        polyline.setAttribute("fill", "none");
+                        polyline.setAttribute("stroke", color === 'blue' ? 'blue' : 'red');
+                        polyline.setAttribute("stroke-width", "2");
+                        polyline.setAttribute("stroke-opacity", "0.6");
+
+                        svg.appendChild(polyline);
+                    }
+                });
+
+                if (svg.hasChildNodes()) {
+                    annotationLayer.appendChild(svg);
+                }
+            }
+
+            // 2. Draw Dots and Text
+            pageAnnotations.forEach(renderSingleAnnotation);
+        }
+
+        function renderSingleAnnotation(annotation) {
+            // Calculate pixel position from percentage
+            const x = annotation.xPct * canvas.width;
+            const y = annotation.yPct * canvas.height;
+
+            // Create Dot
+            const dot = document.createElement('div');
+            let className = `dot ${annotation.size} ${annotation.color}`;
+
+            // Check selection state
+            if (state.selectedDotIds.has(annotation.id)) {
+                className += ' selected';
+            }
+            // Dim non-selected dots in graph mode? Optional, but let's keep it simple.
+
+            dot.className = className;
+            dot.style.left = `${x}px`;
+            dot.style.top = `${y}px`;
+            dot.dataset.id = annotation.id;
+
+            // Click event
+            dot.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                if (state.isGraphMode) {
+                    // Graph Mode: Toggle selection for ANY dot
+                    if (state.selectedDotIds.has(annotation.id)) {
+                        state.selectedDotIds.delete(annotation.id);
+                    } else {
+                        state.selectedDotIds.add(annotation.id);
+                    }
+                    renderAnnotations(); // Re-render to update lines and selection style
+                } else {
+                    // Normal Mode: Edit text
+                    showTextInput(annotation, x, y);
+                }
+            });
+
+            annotationLayer.appendChild(dot);
+
+            // Create Text Label (if text exists)
+            if (annotation.text) {
+                const label = document.createElement('div');
+                label.className = `annotation-text-container ${annotation.color}`;
+                label.style.left = `${x}px`;
+                label.style.top = `${y}px`;
+                label.textContent = annotation.text;
+                annotationLayer.appendChild(label);
+            }
+        }
+
+        function showTextInput(annotation, x, y) {
+            // Remove any existing input
+            const existingInput = document.querySelector('.annotation-input-container');
+            if (existingInput) existingInput.remove();
+
+            const container = document.createElement('div');
+            container.className = 'annotation-input-container';
+            container.style.left = `${x + 15}px`;
+            container.style.top = `${y - 15}px`;
+            container.addEventListener('click', (e) => e.stopPropagation());
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'annotation-input';
+            input.value = annotation.text || '';
+            input.placeholder = 'コメントを入力...';
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = '削除';
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.title = 'この注釈を削除';
+
+            container.appendChild(input);
+            container.appendChild(deleteBtn);
+            annotationLayer.appendChild(container);
+
+            input.focus();
+
+            // Save on blur or enter
+            const save = () => {
+                // Only save if the container is still in the DOM (hasn't been removed by delete)
+                if (document.body.contains(container)) {
+                    annotation.text = input.value;
+                    container.remove();
+                    renderAnnotations(); // Re-render to show updated text label
+                }
+            };
+
+            // We need to be careful with blur event because clicking the delete button triggers blur on input
+            // So we use a slight delay or check relatedTarget, but simpler is to handle specific actions.
+            // Let's use a "Save" action on Enter or clicking outside (which we can simulate by removing on next click elsewhere, 
+            // but the current architecture removes input when clicking elsewhere due to annotationLayer click handler? 
+            // No, annotationLayer click handler creates a NEW dot if not clicking on existing.
+            // Let's stick to: Enter to save, or clicking away (handled by global click listener or just blur).
+
+            // Issue: Clicking "Delete" will blur the input. We don't want to save and close immediately if we are about to delete.
+            // Solution: Use a flag or check if the click target is the delete button.
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    save();
+                }
+            });
+
+            // Handle outside click to save/close is tricky without a global listener. 
+            // For now, let's rely on the user pressing Enter or just clicking elsewhere which might leave it open until another dot is clicked?
+            // Actually, the previous implementation used `blur` to save. Let's keep that but handle the delete button case.
+
+            input.addEventListener('blur', (e) => {
+                // If the related target is the delete button, don't save/close yet (let the delete click handler work)
+                if (e.relatedTarget === deleteBtn) return;
+                save();
+            });
+
+            deleteBtn.addEventListener('click', () => {
+                if (confirm('この注釈を削除しますか？')) {
+                    state.annotations = state.annotations.filter(a => a.id !== annotation.id);
+                    container.remove();
+                    renderAnnotations();
+                } else {
+                    input.focus(); // Return focus if cancelled
+                }
+            });
+        }
+
+        // --- Download Logic ---
+
+        async function downloadPdf() {
+            if (!state.pdfDoc) {
+                alert('PDFが読み込まれていません。');
+                return;
+            }
+
+            try {
+                // 1. Load original PDF
+                // We need the original ArrayBuffer. Since we read it once, let's hope we can get it again or we should have stored it.
+                // In loadPdf, we used FileReader but didn't store the raw buffer globally.
+                // Let's modify loadPdf to store the buffer or just re-read if we had the file object (which we don't persist).
+                // Better: Store the ArrayBuffer in state when loading.
+                if (!state.pdfBuffer) {
+                    alert('PDFデータの取得に失敗しました。再読み込みしてください。');
+                    return;
+                }
+
+                const pdfDoc = await PDFLib.PDFDocument.load(state.pdfBuffer);
+                const pages = pdfDoc.getPages();
+                const { width, height } = pages[0].getSize(); // Assuming all pages same size for simplicity, or check per page
+
+                // 2. Draw Annotations
+                // We need to map our canvas coordinates back to PDF coordinates.
+                // PDF coordinates: (0,0) is usually bottom-left. Canvas: (0,0) is top-left.
+                // Also need to handle scaling.
+                // We stored xPct and yPct (percentages), which is perfect!
+
+                // Define colors
+                const blueColor = PDFLib.rgb(0, 0.48, 1); // #007bff
+                const redColor = PDFLib.rgb(0.86, 0.21, 0.27); // #dc3545
+
+                // Helper to get color
+                const getColor = (colorName) => colorName === 'blue' ? blueColor : redColor;
+
+                // Helper to get size (converting CSS pixels to PDF points)
+                // CSS: 1px = 1/96 inch. PDF: 1pt = 1/72 inch.
+                // Factor: 72/96 = 0.75
+                const pxToPt = 0.75;
+
+                const getSize = (sizeName) => {
+                    switch (sizeName) {
+                        case 'small': return 4 * pxToPt; // 3
+                        case 'medium': return 7 * pxToPt; // 5.25
+                        case 'large': return 10 * pxToPt; // 7.5
+                        default: return 7 * pxToPt;
+                    }
+                };
+
+                // Group annotations by page
+                const annotationsByPage = {};
+                state.annotations.forEach(a => {
+                    if (!annotationsByPage[a.page]) annotationsByPage[a.page] = [];
+                    annotationsByPage[a.page].push(a);
+                });
+
+                // Iterate pages
+                for (let i = 0; i < pages.length; i++) {
+                    const pageNum = i + 1;
+                    const page = pages[i];
+                    const { width: pageWidth, height: pageHeight } = page.getSize();
+                    const pageAnns = annotationsByPage[pageNum] || [];
+
+                    // Draw Graph Lines first (if any selected on this page)
+                    if (state.selectedDotIds && state.selectedDotIds.size > 1) {
+                        ['blue', 'red'].forEach(color => {
+                            const selectedOnPage = pageAnns.filter(a => state.selectedDotIds.has(a.id) && a.color === color);
+                            selectedOnPage.sort((a, b) => a.xPct - b.xPct);
+
+                            if (selectedOnPage.length > 1) {
+                                for (let j = 0; j < selectedOnPage.length - 1; j++) {
+                                    const start = selectedOnPage[j];
+                                    const end = selectedOnPage[j + 1];
+
+                                    page.drawLine({
+                                        start: { x: start.xPct * pageWidth, y: pageHeight - (start.yPct * pageHeight) },
+                                        end: { x: end.xPct * pageWidth, y: pageHeight - (end.yPct * pageHeight) },
+                                        thickness: 2 * pxToPt, // Adjust thickness too
+                                        color: getColor(color),
+                                        opacity: 0.6,
+                                    });
+                                }
+                            }
+                        });
+                    }
+
+                    // Draw Dots and Text
+                    for (const ann of pageAnns) {
+                        const x = ann.xPct * pageWidth;
+                        const y = pageHeight - (ann.yPct * pageHeight); // Flip Y for PDF
+                        const color = getColor(ann.color);
+                        const size = getSize(ann.size);
+
+                        // Draw Dot
+                        page.drawCircle({
+                            x: x,
+                            y: y,
+                            size: size,
+                            color: color,
+                        });
+
+                        // Draw Text
+                        if (ann.text) {
+                            // Use standard font
+                            const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+                            const textSize = 12;
+                            page.drawText(ann.text, {
+                                x: x + 10,
+                                y: y - 4, // Adjust for baseline
+                                size: textSize,
+                                font: font,
+                                color: color,
+                            });
+                        }
+                    }
+                }
+
+                // 3. Save and Download
+                const pdfBytes = await pdfDoc.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'annotated.pdf';
+                link.click();
+
+            } catch (err) {
+                console.error('Error creating PDF:', err);
+                alert('PDFの作成に失敗しました。');
+            }
+        }
+
+    </script>
+
+</body>
+
+</html>
