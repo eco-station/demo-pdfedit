@@ -1459,7 +1459,10 @@
                         el.style.transform = 'none';
                     } else if (ann.type === 'stamp') {
                         el.classList.add('stamp-annotation', ann.stampType);
-                        el.textContent = ann.stampType.toUpperCase();
+                        let text = ann.stampType.toUpperCase();
+                        if (ann.stampType === 'review') text = '要確認';
+                        if (ann.stampType === 'fix') text = '修正';
+                        el.textContent = text;
                     }
 
                     annotationLayer.appendChild(el);
@@ -1509,7 +1512,10 @@
                     content = ann.comment || 'ホワイトアウト';
                     icon = 'W';
                 } else if (ann.type === 'stamp') {
-                    content = ann.stampType.toUpperCase();
+                    let text = ann.stampType.toUpperCase();
+                    if (ann.stampType === 'review') text = '要確認';
+                    if (ann.stampType === 'fix') text = '修正';
+                    content = text;
                     icon = 'S';
                 }
 
@@ -1742,7 +1748,11 @@
                             // Let's make it pure white rectangle.
                         });
                     } else if (ann.type === 'stamp') {
-                        page.drawText(ann.stampType.toUpperCase(), {
+                        let text = ann.stampType.toUpperCase();
+                        if (ann.stampType === 'review') text = '要確認';
+                        if (ann.stampType === 'fix') text = '修正';
+
+                        page.drawText(text, {
                             x, y, size: 12, color,
                             borderColor: color, borderWidth: 2,
                             font: customFont
