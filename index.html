@@ -106,13 +106,39 @@
                 <span id="text-size-control" style="display:none;">
                     <input type="number" id="font-size-input" value="14" min="8" max="100"
                         style="width: 50px; padding: 2px;"> px
-                    <select id="font-select" style="margin-left: 5px;">
-                        <option value="Noto Sans JP">ゴシック</option>
-                        <option value="Noto Serif JP">明朝体</option>
-                        <option value="Yomogi">手書き風</option>
-                        <option value="Zen Maru Gothic">丸ゴシック</option>
-                        <option value="Hachi Maru Pop">ポップ体</option>
-                        <option value="Rampart One">極太</option>
+                    <select id="font-select" style="margin-left: 5px; max-width: 150px;">
+                        <optgroup label="ビジネス (ゴシック)">
+                            <option value="Noto Sans JP">Noto Sans JP (標準)</option>
+                            <option value="BIZ UDPGothic">BIZ UDPGothic</option>
+                            <option value="BIZ UDGothic">BIZ UDGothic</option>
+                            <option value="Sawarabi Gothic">さわらびゴシック</option>
+                            <option value="M PLUS 1p">M PLUS 1p</option>
+                            <option value="Zen Kaku Gothic New">Zen 角ゴシック</option>
+                            <option value="IBM Plex Sans JP">IBM Plex Sans JP</option>
+                        </optgroup>
+                        <optgroup label="ビジネス (明朝)">
+                            <option value="Noto Serif JP">Noto Serif JP (標準)</option>
+                            <option value="BIZ UDPMincho">BIZ UDPMincho</option>
+                            <option value="BIZ UDMincho">BIZ UDMincho</option>
+                            <option value="Sawarabi Mincho">さわらび明朝</option>
+                            <option value="Zen Old Mincho">Zen オールド明朝</option>
+                            <option value="Shippori Mincho">しっぽり明朝</option>
+                        </optgroup>
+                        <optgroup label="モダン・丸文字">
+                            <option value="Klee One">Klee One (教科書体)</option>
+                            <option value="Kosugi">Kosugi</option>
+                            <option value="Zen Maru Gothic">Zen 丸ゴシック</option>
+                            <option value="Kosugi Maru">Kosugi Maru</option>
+                            <option value="Kiwi Maru">キウイ丸</option>
+                        </optgroup>
+                        <optgroup label="手書き・ポップ・デザイン">
+                            <option value="Yomogi">Yomogi (手書き)</option>
+                            <option value="Hachi Maru Pop">ハチまるポップ</option>
+                            <option value="RocknRoll One">RocknRoll One</option>
+                            <option value="DotGothic16">ドットゴシック</option>
+                            <option value="Rampart One">Rampart One (極太)</option>
+                            <option value="Reggae One">Reggae One</option>
+                        </optgroup>
                     </select>
                 </span>
             </div>

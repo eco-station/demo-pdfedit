@@ -1164,14 +1164,39 @@ async function downloadPdf() {
         async function loadFont(family) {
             if (fontMap.has(family)) return fontMap.get(family);
 
-            let cssUrl = '';
-            if (family === 'Noto Sans JP') cssUrl = 'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400&display=swap';
-            else if (family === 'Noto Serif JP') cssUrl = 'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400&display=swap';
-            else if (family === 'Yomogi') cssUrl = 'https://fonts.googleapis.com/css2?family=Yomogi&display=swap';
-            else if (family === 'Zen Maru Gothic') cssUrl = 'https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400&display=swap';
-            else if (family === 'Hachi Maru Pop') cssUrl = 'https://fonts.googleapis.com/css2?family=Hachi+Maru+Pop&display=swap';
-            else if (family === 'Rampart One') cssUrl = 'https://fonts.googleapis.com/css2?family=Rampart+One&display=swap';
-            else return null; // Fallback
+            // Font Map Configuration
+            const fontConfig = {
+                'Noto Sans JP': 'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400&display=swap',
+                'BIZ UDPGothic': 'https://fonts.googleapis.com/css2?family=BIZ+UDPGothic&display=swap',
+                'BIZ UDGothic': 'https://fonts.googleapis.com/css2?family=BIZ+UDGothic&display=swap',
+                'Sawarabi Gothic': 'https://fonts.googleapis.com/css2?family=Sawarabi+Gothic&display=swap',
+                'M PLUS 1p': 'https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400&display=swap',
+                'Zen Kaku Gothic New': 'https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400&display=swap',
+                'IBM Plex Sans JP': 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400&display=swap',
+
+                'Noto Serif JP': 'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400&display=swap',
+                'BIZ UDPMincho': 'https://fonts.googleapis.com/css2?family=BIZ+UDPMincho&display=swap',
+                'BIZ UDMincho': 'https://fonts.googleapis.com/css2?family=BIZ+UDMincho&display=swap',
+                'Sawarabi Mincho': 'https://fonts.googleapis.com/css2?family=Sawarabi+Mincho&display=swap',
+                'Zen Old Mincho': 'https://fonts.googleapis.com/css2?family=Zen+Old+Mincho&display=swap',
+                'Shippori Mincho': 'https://fonts.googleapis.com/css2?family=Shippori+Mincho&display=swap',
+
+                'Klee One': 'https://fonts.googleapis.com/css2?family=Klee+One&display=swap',
+                'Kosugi': 'https://fonts.googleapis.com/css2?family=Kosugi&display=swap',
+                'Zen Maru Gothic': 'https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400&display=swap',
+                'Kosugi Maru': 'https://fonts.googleapis.com/css2?family=Kosugi+Maru&display=swap',
+                'Kiwi Maru': 'https://fonts.googleapis.com/css2?family=Kiwi+Maru&display=swap',
+
+                'Yomogi': 'https://fonts.googleapis.com/css2?family=Yomogi&display=swap',
+                'Hachi Maru Pop': 'https://fonts.googleapis.com/css2?family=Hachi+Maru+Pop&display=swap',
+                'RocknRoll One': 'https://fonts.googleapis.com/css2?family=RocknRoll+One&display=swap',
+                'DotGothic16': 'https://fonts.googleapis.com/css2?family=DotGothic16&display=swap',
+                'Rampart One': 'https://fonts.googleapis.com/css2?family=Rampart+One&display=swap',
+                'Reggae One': 'https://fonts.googleapis.com/css2?family=Reggae+One&display=swap'
+            };
+
+            let cssUrl = fontConfig[family];
+            if (!cssUrl) return null; // Fallback
 
             // Fetch CSS to find the font file URL
             const cssRes = await fetch(cssUrl);
