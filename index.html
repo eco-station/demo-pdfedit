@@ -480,6 +480,37 @@
             border-color: #e74c3c;
         }
 
+        /* Point Picker Popup */
+        .point-picker {
+            position: absolute;
+            z-index: 200;
+            display: flex;
+            gap: 4px;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 4px 6px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+            transform: translate(-50%, -120%);
+        }
+
+        .point-picker-item {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.15s;
+            user-select: none;
+        }
+
+        .point-picker-item:hover {
+            background-color: #e6f0ff;
+        }
+
         /* Text Input Overlay */
         .annotation-input {
             position: absolute;
@@ -770,10 +801,10 @@
                 <span style="font-weight:bold;">モード:</span>
                 <label class="radio-label"><input type="radio" name="mode" value="point" checked> 点</label>
                 <label class="radio-label"><input type="radio" name="mode" value="text"> テキスト</label>
-                <label class="radio-label"><input type="radio" name="mode" value="highlight"> ハイライト</label>
+                <!-- <label class="radio-label"><input type="radio" name="mode" value="highlight"> ハイライト</label>
                 <label class="radio-label"><input type="radio" name="mode" value="whiteout"> 白塗り</label>
                 <label class="radio-label"><input type="radio" name="mode" value="stamp"> スタンプ</label>
-                <label class="radio-label"><input type="radio" name="mode" value="image"> 画像</label>
+                <label class="radio-label"><input type="radio" name="mode" value="image"> 画像</label> -->
             </div>
 
             <div class="control-item" id="image-controls" style="display:none;">
@@ -807,14 +838,13 @@
                     <label class="radio-label"><input type="radio" name="size" value="8" checked> 中</label>
                     <label class="radio-label"><input type="radio" name="size" value="12"> 大</label>
                 </span>
-                <span id="point-shape-control"
-                    style="margin-left: 10px; border-left: 1px solid #ccc; padding-left: 10px;">
+                <span id="point-shape-control" style="display:none;">
                     <label class="radio-label"><input type="radio" name="point-shape" value="dot" checked> ●</label>
                     <label class="radio-label"><input type="radio" name="point-shape" value="circle"> ○</label>
                     <label class="radio-label"><input type="radio" name="point-shape" value="cross"> ×</label>
                 </span>
                 <span id="text-size-control" style="display:none;">
-                    <input type="number" id="font-size-input" value="14" min="8" max="100"
+                    <input type="number" id="font-size-input" value="25" min="8" max="100"
                         style="width: 50px; padding: 2px;"> px
                     <select id="font-select" style="margin-left: 5px; max-width: 150px;">
                         <optgroup label="ビジネス (ゴシック)">
@@ -884,7 +914,8 @@
             dragStart: null, // {x, y} for highlight dragging
             currentSettings: {
                 color: 'blue',
-                size: 8, // Default Medium
+                size: 8, // Default Medium (point)
+                textSize: 25, // Default text size
                 stampType: 'ok',
                 font: 'Noto Sans JP', // Default Font
                 pointShape: 'dot' // dot, circle, cross
@@ -1038,9 +1069,9 @@
                     pointSizeControl.style.display = 'none';
                     textSizeControl.style.display = 'inline';
                     fontSelect.style.display = 'inline-block'; // Show font select
+                    fontSizeInput.value = state.currentSettings.textSize;
                 } else {
                     pointSizeControl.style.display = 'inline';
-                    pointShapeControl.style.display = 'inline';
                     textSizeControl.style.display = 'none';
                     fontSelect.style.display = 'none'; // Hide font select
                 }
@@ -1086,7 +1117,7 @@
         fontSizeInput.addEventListener('input', (e) => {
             const newSize = parseInt(e.target.value);
             if (newSize > 0) {
-                state.currentSettings.size = newSize;
+                state.currentSettings.textSize = newSize;
 
                 // If editing, update the input box immediately
                 if (state.editingId) {
@@ -1515,14 +1546,7 @@
                 const y = e.clientY - rect.top;
 
                 if (state.mode === 'point') {
-                    addAnnotation({
-                        type: 'point',
-                        x, y,
-                        color: state.currentSettings.color,
-                        size: state.currentSettings.size,
-                        shape: state.currentSettings.pointShape,
-                        comment: ''
-                    });
+                    showPointPicker(x, y);
                 } else if (state.mode === 'text') {
                     // Create input immediately
                     showTextInput(x, y);
@@ -1588,8 +1612,8 @@
 
             // Apply current size to input
             const fontSize = existingId
-                ? (state.annotations.find(a => a.id === existingId).size || 14)
-                : state.currentSettings.size;
+                ? (state.annotations.find(a => a.id === existingId).size || 25)
+                : state.currentSettings.textSize;
             input.style.fontSize = `${fontSize}px`;
 
             // Apply current font to input
@@ -1640,7 +1664,7 @@
                             x, y,
                             text: text,
                             color: state.currentSettings.color,
-                            size: state.currentSettings.size,
+                            size: state.currentSettings.textSize,
                             font: state.currentSettings.font
                         });
                     }
@@ -1674,6 +1698,61 @@
             input.focus();
         }
 
+        function showPointPicker(x, y) {
+            // Remove any existing picker
+            const existing = document.querySelector('.point-picker');
+            if (existing) existing.remove();
+
+            const picker = document.createElement('div');
+            picker.className = 'point-picker';
+            picker.style.left = x + 'px';
+            picker.style.top = y + 'px';
+
+            const options = [
+                { label: '⚫', shape: 'dot' },
+                { label: '⚪', shape: 'circle' },
+                { label: '✕', shape: 'cross' }
+            ];
+
+            options.forEach(opt => {
+                const item = document.createElement('div');
+                item.className = 'point-picker-item';
+                item.textContent = opt.label;
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    state.currentSettings.pointShape = opt.shape;
+                    // Update the radio button in the footer
+                    const radio = document.querySelector(`input[name="point-shape"][value="${opt.shape}"]`);
+                    if (radio) radio.checked = true;
+
+                    addAnnotation({
+                        type: 'point',
+                        x, y,
+                        color: state.currentSettings.color,
+                        size: state.currentSettings.size,
+                        shape: opt.shape,
+                        comment: ''
+                    });
+                    picker.remove();
+                });
+                picker.appendChild(item);
+            });
+
+            annotationLayer.appendChild(picker);
+
+            // Close picker when clicking elsewhere
+            const closePicker = (e) => {
+                if (!picker.contains(e.target)) {
+                    picker.remove();
+                    document.removeEventListener('mousedown', closePicker);
+                }
+            };
+            // Use setTimeout to avoid the current click event triggering immediate close
+            setTimeout(() => {
+                document.addEventListener('mousedown', closePicker);
+            }, 0);
+        }
+
         function deleteAnnotation(id) {
             pushState();
             state.annotations = state.annotations.filter(a => a.id !== id);
@@ -1692,7 +1771,7 @@
                     pointSizeControl.style.display = 'none';
                     textSizeControl.style.display = 'inline';
                     fontSelect.style.display = 'inline-block';
-                    fontSizeInput.value = ann.size || 14;
+                    fontSizeInput.value = ann.size || 25;
                     fontSelect.value = ann.font || 'Noto Sans JP';
 
                     // Also switch mode UI to show style controls if not already
@@ -1701,7 +1780,6 @@
                     stampControls.style.display = 'none';
                 } else if (ann.type === 'point') {
                     pointSizeControl.style.display = 'inline';
-                    pointShapeControl.style.display = 'inline';
                     textSizeControl.style.display = 'none';
                     fontSelect.style.display = 'none';
                     // Update radio button
@@ -1799,14 +1877,16 @@
                     if (ann.type === 'point') {
                         el.classList.add('dot', ann.color);
                         if (ann.shape) el.classList.add(ann.shape);
-                        // Use numeric size
-                        let size = ann.size || 14;
-                        // Increase size for circle and cross
-                        if (ann.shape === 'circle' || ann.shape === 'cross') {
-                            size *= 1.5;
+                        const baseSize = ann.size || 8;
+                        let displaySize = baseSize;
+                        // ⚪ and ✕ need to be slightly larger to look visually equal to ⚫
+                        if (ann.shape === 'circle') {
+                            displaySize = baseSize + 4; // border takes space inside, so add offset
+                        } else if (ann.shape === 'cross') {
+                            displaySize = baseSize + 2;
                         }
-                        el.style.width = `${size}px`;
-                        el.style.height = `${size}px`;
+                        el.style.width = `${displaySize}px`;
+                        el.style.height = `${displaySize}px`;
 
                         if (state.isGraphMode && state.selectedDotIds.has(ann.id)) {
                             el.style.boxShadow = '0 0 0 3px rgba(0,0,0,0.3)';
@@ -1814,7 +1894,7 @@
                     } else if (ann.type === 'text') {
                         el.classList.add('text-annotation', ann.color);
                         // Use numeric size
-                        const size = ann.size || 14;
+                        const size = ann.size || 25;
                         el.style.fontSize = `${size}px`;
                         el.style.fontFamily = ann.font || 'Noto Sans JP';
 
