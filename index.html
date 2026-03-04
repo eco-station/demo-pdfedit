@@ -16,7 +16,6 @@
             --danger-color: #e74c3c;
             --blue-color: #007bff;
             --red-color: #dc3545;
-            --orange-color: #ff9800;
             --highlight-color: rgba(255, 255, 0, 0.4);
             --success-color: #2ecc71;
             --sidebar-width: 300px;
@@ -309,29 +308,10 @@
             background-color: #333;
         }
 
-        .dot.orange {
-            background-color: var(--orange-color);
-        }
-
-        .dot.small {
-            width: 4px;
-            height: 4px;
-        }
-
-        .dot.medium {
-            width: 8px;
-            height: 8px;
-        }
-
-        .dot.large {
-            width: 12px;
-            height: 12px;
-        }
-
         /* Shapes */
         .dot.circle {
             background-color: transparent !important;
-            border: 2px solid;
+            border: 3px solid;
             box-sizing: border-box;
         }
 
@@ -347,10 +327,6 @@
             border-color: #333;
         }
 
-        .dot.circle.orange {
-            border-color: var(--orange-color);
-        }
-
         .dot.cross {
             background-color: transparent !important;
         }
@@ -362,7 +338,7 @@
             top: 50%;
             left: 50%;
             width: 100%;
-            height: 2px;
+            height: 3px;
             background-color: currentColor;
             transform: translate(-50%, -50%) rotate(45deg);
         }
@@ -383,10 +359,6 @@
             color: #333;
         }
 
-        .dot.cross.orange {
-            color: var(--orange-color);
-        }
-
         /* Text Annotation */
         .text-annotation {
             background: transparent;
@@ -396,7 +368,7 @@
             font-size: 14px;
             white-space: nowrap;
             color: var(--text-color);
-            transform: translate(0, -50%);
+            transform: none;
             text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
             /* Improve readability */
         }
@@ -411,22 +383,6 @@
 
         .text-annotation.black {
             color: #333;
-        }
-
-        .text-annotation.orange {
-            color: var(--orange-color);
-        }
-
-        .text-annotation.small {
-            font-size: 12px;
-        }
-
-        .text-annotation.medium {
-            font-size: 16px;
-        }
-
-        .text-annotation.large {
-            font-size: 20px;
         }
 
         /* Highlight Annotation */
@@ -495,12 +451,12 @@
         }
 
         .point-picker-item {
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
+            font-size: 26px;
             cursor: pointer;
             border-radius: 4px;
             transition: background-color 0.15s;
@@ -526,10 +482,7 @@
             background: rgba(255, 255, 255, 0.9);
             /* Slight background for readability while typing */
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-            transform: translate(0, -50%);
-            /* Center vertically on cursor */
             color: var(--text-color);
-            /* Default color */
         }
 
         /* Highlight animation */
@@ -658,10 +611,6 @@
 
         .color-sample.black {
             background-color: #333;
-        }
-
-        .color-sample.orange {
-            background-color: var(--orange-color);
         }
 
         /* Print Styles */
@@ -801,6 +750,7 @@
                 <span style="font-weight:bold;">モード:</span>
                 <label class="radio-label"><input type="radio" name="mode" value="point" checked> 点</label>
                 <label class="radio-label"><input type="radio" name="mode" value="text"> テキスト</label>
+                <label class="radio-label"><input type="radio" name="mode" value="marubatsu"> マルバツ</label>
                 <!-- <label class="radio-label"><input type="radio" name="mode" value="highlight"> ハイライト</label>
                 <label class="radio-label"><input type="radio" name="mode" value="whiteout"> 白塗り</label>
                 <label class="radio-label"><input type="radio" name="mode" value="stamp"> スタンプ</label>
@@ -830,19 +780,6 @@
                         class="color-sample red"></span></label>
                 <label class="radio-label"><input type="radio" name="color" value="black"> <span
                         class="color-sample black"></span></label>
-                <label class="radio-label"><input type="radio" name="color" value="orange"> <span
-                        class="color-sample orange"></span></label>
-                <span style="margin-left:5px;">サイズ:</span>
-                <span id="point-size-control">
-                    <label class="radio-label"><input type="radio" name="size" value="4"> 小</label>
-                    <label class="radio-label"><input type="radio" name="size" value="8" checked> 中</label>
-                    <label class="radio-label"><input type="radio" name="size" value="12"> 大</label>
-                </span>
-                <span id="point-shape-control" style="display:none;">
-                    <label class="radio-label"><input type="radio" name="point-shape" value="dot" checked> ●</label>
-                    <label class="radio-label"><input type="radio" name="point-shape" value="circle"> ○</label>
-                    <label class="radio-label"><input type="radio" name="point-shape" value="cross"> ×</label>
-                </span>
                 <span id="text-size-control" style="display:none;">
                     <input type="number" id="font-size-input" value="25" min="8" max="100"
                         style="width: 50px; padding: 2px;"> px
@@ -910,11 +847,11 @@
             undoStack: [],
             redoStack: [],
             selectedAnnotationId: null,
-            mode: 'point', // point, text, highlight, stamp
+            mode: 'point', // point, text, marubatsu, highlight, stamp
             dragStart: null, // {x, y} for highlight dragging
             currentSettings: {
                 color: 'blue',
-                size: 8, // Default Medium (point)
+                size: 8, // kept for backward compat
                 textSize: 25, // Default text size
                 stampType: 'ok',
                 font: 'Noto Sans JP', // Default Font
@@ -952,8 +889,6 @@
         const imageControls = document.getElementById('image-controls');
         const stampTypeSelect = document.getElementById('stamp-type');
         const graphModeCheckbox = document.getElementById('graph-mode-chk');
-        const pointSizeControl = document.getElementById('point-size-control');
-        const pointShapeControl = document.getElementById('point-shape-control');
         const textSizeControl = document.getElementById('text-size-control');
         const fontSizeInput = document.getElementById('font-size-input');
         const fontSelect = document.getElementById('font-select');
@@ -1018,11 +953,6 @@
                     } else {
                         alert('先にPDFを開いてください。');
                     }
-                } else {
-                    // Only alert if it's not a supported file type and we are trying to do something
-                    // But to be safe and not annoying, maybe just log or ignore if it's not what we want?
-                    // The user specifically asked for this fix, so let's be explicit.
-                    // However, if the user drops something else, we should prevent default anyway (done above).
                 }
             }
         });
@@ -1062,56 +992,19 @@
             } else if (state.mode === 'highlight' || state.mode === 'whiteout') {
                 // No controls
             } else {
+                // point, text, marubatsu
                 styleControls.style.display = 'flex';
 
-                // Toggle between Point (S/M/L) and Text (Numeric) size controls
                 if (state.mode === 'text') {
-                    pointSizeControl.style.display = 'none';
                     textSizeControl.style.display = 'inline';
-                    fontSelect.style.display = 'inline-block'; // Show font select
+                    fontSelect.style.display = 'inline-block';
                     fontSizeInput.value = state.currentSettings.textSize;
                 } else {
-                    pointSizeControl.style.display = 'inline';
                     textSizeControl.style.display = 'none';
-                    fontSelect.style.display = 'none'; // Hide font select
+                    fontSelect.style.display = 'none';
                 }
             }
         }
-
-        // Settings
-        // Point Size (S/M/L)
-        document.querySelectorAll('input[name="size"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                const newSize = parseInt(e.target.value);
-                state.currentSettings.size = newSize;
-
-                // Only apply to Point annotations if selected
-                if (state.selectedAnnotationId) {
-                    const ann = state.annotations.find(a => a.id === state.selectedAnnotationId);
-                    if (ann && ann.type === 'point') {
-                        ann.size = newSize;
-                        renderAnnotations();
-                    }
-                }
-            });
-        });
-
-        // Point Shape
-        document.querySelectorAll('input[name="point-shape"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                state.currentSettings.pointShape = e.target.value;
-
-                // Only apply to Point annotations if selected
-                if (state.selectedAnnotationId) {
-                    const ann = state.annotations.find(a => a.id === state.selectedAnnotationId);
-                    if (ann && ann.type === 'point') {
-                        ann.shape = state.currentSettings.pointShape;
-                        renderAnnotations();
-                        renderSidebar();
-                    }
-                }
-            });
-        });
 
         // Text Font Size (Numeric)
         fontSizeInput.addEventListener('input', (e) => {
@@ -1176,7 +1069,6 @@
                     const colorName = state.currentSettings.color;
                     if (colorName === 'blue') input.style.color = 'var(--blue-color)';
                     else if (colorName === 'red') input.style.color = 'var(--red-color)';
-                    else if (colorName === 'orange') input.style.color = 'var(--orange-color)';
                     else input.style.color = '#333';
 
                     // Also update the state object
@@ -1347,7 +1239,7 @@
                 if (state.isGraphMode && ann.type === 'point') return;
 
                 // Allow clicking "through" whiteout/highlight to add text/points on top
-                if ((state.mode === 'text' || state.mode === 'point' || state.mode === 'stamp') &&
+                if ((state.mode === 'text' || state.mode === 'point' || state.mode === 'stamp' || state.mode === 'marubatsu') &&
                     (ann.type === 'whiteout' || ann.type === 'highlight')) {
                     // Don't start dragging, let the click event handle addition
                     return;
@@ -1530,7 +1422,7 @@
                 const ann = state.annotations.find(a => a.id === id);
 
                 // Allow clicking "through" whiteout/highlight to add text/points on top
-                if ((state.mode === 'text' || state.mode === 'point' || state.mode === 'stamp') &&
+                if ((state.mode === 'text' || state.mode === 'point' || state.mode === 'stamp' || state.mode === 'marubatsu') &&
                     (ann.type === 'whiteout' || ann.type === 'highlight')) {
                     // Pass through -> Don't return, so we can add annotation below
                 } else {
@@ -1540,22 +1432,31 @@
             }
 
             // If clicked on background
-            if (state.mode === 'point' || state.mode === 'text' || state.mode === 'stamp') {
+            if (state.mode === 'point' || state.mode === 'text' || state.mode === 'stamp' || state.mode === 'marubatsu') {
                 const rect = annotationLayer.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
 
                 if (state.mode === 'point') {
-                    showPointPicker(x, y);
+                    // 直接●を配置（ポップアップなし）
+                    addAnnotation({
+                        type: 'point',
+                        x, y,
+                        color: state.currentSettings.color,
+                        size: 8,
+                        shape: 'dot',
+                        comment: ''
+                    });
+                } else if (state.mode === 'marubatsu') {
+                    showMarubatsuPicker(x, y);
                 } else if (state.mode === 'text') {
-                    // Create input immediately
                     showTextInput(x, y);
                 } else if (state.mode === 'stamp') {
                     addAnnotation({
                         type: 'stamp',
                         x, y,
                         stampType: state.currentSettings.stampType,
-                        comment: '' // Optional
+                        comment: ''
                     });
                 }
             } else {
@@ -1604,11 +1505,26 @@
         }
 
         function showTextInput(x, y, existingId = null) {
+            // Create wrapper div for positioning and drag support
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = `position:absolute; left:${x}px; top:${y}px; z-index:150; cursor:grab;`;
+
+            // Tooltip
+            const tooltip = document.createElement('span');
+            tooltip.textContent = 'ドラッグで位置調整 → Enterで確定';
+            tooltip.style.cssText = 'font-size:10px; color:#888; position:absolute; top:-16px; left:0; white-space:nowrap; pointer-events:none; user-select:none;';
+            wrapper.appendChild(tooltip);
+
             const input = document.createElement('input');
             input.type = 'text';
             input.className = 'annotation-input';
-            input.style.left = x + 'px';
-            input.style.top = y + 'px';
+            // Override positioning — wrapper handles the absolute position
+            input.style.position = 'relative';
+            input.style.left = '0';
+            input.style.top = '0';
+            input.style.transform = 'none';
+            input.style.zIndex = 'auto';
+            input.style.cursor = 'grab';
 
             // Apply current size to input
             const fontSize = existingId
@@ -1629,7 +1545,6 @@
 
             if (colorName === 'blue') input.style.color = 'var(--blue-color)';
             else if (colorName === 'red') input.style.color = 'var(--red-color)';
-            else if (colorName === 'orange') input.style.color = 'var(--orange-color)';
             else input.style.color = '#333';
 
             if (existingId) {
@@ -1638,6 +1553,42 @@
                 input.value = ann.text || '';
                 renderAnnotations(); // Re-render to hide the underlying text
             }
+
+            wrapper.appendChild(input);
+
+            // --- Drag handling ---
+            let isDraggingInput = false;
+            let dragStartX, dragStartY, wrapperStartLeft, wrapperStartTop;
+
+            const onMouseDown = (e) => {
+                isDraggingInput = true;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                wrapperStartLeft = parseFloat(wrapper.style.left) || x;
+                wrapperStartTop = parseFloat(wrapper.style.top) || y;
+                wrapper.style.cursor = 'grabbing';
+                input.style.cursor = 'grabbing';
+            };
+
+            const onMouseMove = (e) => {
+                if (!isDraggingInput) return;
+                const dx = e.clientX - dragStartX;
+                const dy = e.clientY - dragStartY;
+                wrapper.style.left = (wrapperStartLeft + dx) + 'px';
+                wrapper.style.top = (wrapperStartTop + dy) + 'px';
+            };
+
+            const onMouseUp = () => {
+                if (isDraggingInput) {
+                    isDraggingInput = false;
+                    wrapper.style.cursor = 'grab';
+                    input.style.cursor = 'grab';
+                }
+            };
+
+            input.addEventListener('mousedown', onMouseDown);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
 
             let isComposing = false;
             let isSaved = false; // Flag to prevent double save (Enter + Blur)
@@ -1649,6 +1600,14 @@
                 if (isSaved) return;
                 isSaved = true;
 
+                // Clean up drag event handlers
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+
+                // Get final position from wrapper
+                const finalX = parseFloat(wrapper.style.left) || x;
+                const finalY = parseFloat(wrapper.style.top) || y;
+
                 const text = input.value.trim();
                 if (text) {
                     if (existingId) {
@@ -1656,12 +1615,17 @@
                         const ann = state.annotations.find(a => a.id === existingId);
                         if (ann) {
                             ann.text = text;
-                            ann.font = state.currentSettings.font; // Update font if changed
+                            ann.font = state.currentSettings.font;
+                            // Update position to dragged position
+                            const layerWidth = annotationLayer.clientWidth || canvas.width;
+                            const layerHeight = annotationLayer.clientHeight || canvas.height;
+                            ann.xPct = finalX / layerWidth;
+                            ann.yPct = finalY / layerHeight;
                         }
                     } else {
                         addAnnotation({
                             type: 'text',
-                            x, y,
+                            x: finalX, y: finalY,
                             text: text,
                             color: state.currentSettings.color,
                             size: state.currentSettings.textSize,
@@ -1670,7 +1634,7 @@
                     }
                 }
 
-                input.remove();
+                wrapper.remove();
                 state.editingId = null; // Clear editing state
                 renderAnnotations();
                 renderSidebar();
@@ -1681,7 +1645,9 @@
                     saveAndClose();
                 } else if (e.key === 'Escape') {
                     isSaved = true; // Don't save on blur if escaped
-                    input.remove();
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    wrapper.remove();
                     state.editingId = null; // Clear editing state
                     renderAnnotations();
                 }
@@ -1694,11 +1660,11 @@
                 }, 100);
             };
 
-            annotationLayer.appendChild(input);
+            annotationLayer.appendChild(wrapper);
             input.focus();
         }
 
-        function showPointPicker(x, y) {
+        function showMarubatsuPicker(x, y) {
             // Remove any existing picker
             const existing = document.querySelector('.point-picker');
             if (existing) existing.remove();
@@ -1709,9 +1675,8 @@
             picker.style.top = y + 'px';
 
             const options = [
-                { label: '⚫', shape: 'dot' },
-                { label: '⚪', shape: 'circle' },
-                { label: '✕', shape: 'cross' }
+                { label: '○', shape: 'circle' },
+                { label: '×', shape: 'cross' }
             ];
 
             options.forEach(opt => {
@@ -1720,16 +1685,11 @@
                 item.textContent = opt.label;
                 item.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    state.currentSettings.pointShape = opt.shape;
-                    // Update the radio button in the footer
-                    const radio = document.querySelector(`input[name="point-shape"][value="${opt.shape}"]`);
-                    if (radio) radio.checked = true;
-
                     addAnnotation({
                         type: 'point',
                         x, y,
                         color: state.currentSettings.color,
-                        size: state.currentSettings.size,
+                        size: 26,
                         shape: opt.shape,
                         comment: ''
                     });
@@ -1768,7 +1728,6 @@
             const ann = state.annotations.find(a => a.id === id);
             if (ann) {
                 if (ann.type === 'text') {
-                    pointSizeControl.style.display = 'none';
                     textSizeControl.style.display = 'inline';
                     fontSelect.style.display = 'inline-block';
                     fontSizeInput.value = ann.size || 25;
@@ -1777,17 +1736,9 @@
                     // Also switch mode UI to show style controls if not already
                     styleControls.style.display = 'flex';
                     stampControls.style.display = 'none';
-                    stampControls.style.display = 'none';
                 } else if (ann.type === 'point') {
-                    pointSizeControl.style.display = 'inline';
                     textSizeControl.style.display = 'none';
                     fontSelect.style.display = 'none';
-                    // Update radio button
-                    const radio = document.querySelector(`input[name="size"][value="${ann.size}"]`);
-                    if (radio) radio.checked = true;
-
-                    const shapeRadio = document.querySelector(`input[name="point-shape"][value="${ann.shape || 'dot'}"]`);
-                    if (shapeRadio) shapeRadio.checked = true;
 
                     styleControls.style.display = 'flex';
                     stampControls.style.display = 'none';
@@ -1838,9 +1789,8 @@
                     const bluePoints = selectedPoints.filter(a => a.color === 'blue').sort((a, b) => a.xPct - b.xPct);
                     const redPoints = selectedPoints.filter(a => a.color === 'red').sort((a, b) => a.xPct - b.xPct);
                     const blackPoints = selectedPoints.filter(a => a.color === 'black').sort((a, b) => a.xPct - b.xPct);
-                    const orangePoints = selectedPoints.filter(a => a.color === 'orange').sort((a, b) => a.xPct - b.xPct);
 
-                    [bluePoints, redPoints, blackPoints, orangePoints].forEach(points => {
+                    [bluePoints, redPoints, blackPoints].forEach(points => {
                         if (points.length > 1) {
                             const polyline = document.createElementNS(svgNS, "polyline");
                             const pointsStr = points.map(p => `${p.xPct * canvas.width},${p.yPct * canvas.height}`).join(' ');
@@ -1849,7 +1799,6 @@
                             let strokeColor = "var(--blue-color)";
                             if (points[0].color === 'red') strokeColor = "var(--red-color)";
                             else if (points[0].color === 'black') strokeColor = "#333";
-                            else if (points[0].color === 'orange') strokeColor = "var(--orange-color)";
 
                             polyline.setAttribute("stroke", strokeColor);
                             polyline.setAttribute("stroke-width", "2");
@@ -1877,13 +1826,13 @@
                     if (ann.type === 'point') {
                         el.classList.add('dot', ann.color);
                         if (ann.shape) el.classList.add(ann.shape);
-                        const baseSize = ann.size || 8;
-                        let displaySize = baseSize;
-                        // ⚪ and ✕ need to be slightly larger to look visually equal to ⚫
-                        if (ann.shape === 'circle') {
-                            displaySize = baseSize + 4; // border takes space inside, so add offset
-                        } else if (ann.shape === 'cross') {
-                            displaySize = baseSize + 2;
+
+                        // Size is determined by shape, not by ann.size
+                        let displaySize;
+                        if (ann.shape === 'circle' || ann.shape === 'cross') {
+                            displaySize = 26;
+                        } else {
+                            displaySize = 8; // dot
                         }
                         el.style.width = `${displaySize}px`;
                         el.style.height = `${displaySize}px`;
@@ -1975,7 +1924,6 @@
 
                 let content = '';
                 let icon = '';
-                let details = '';
 
                 if (ann.type === 'point') {
                     const shape = ann.shape || 'dot';
@@ -1986,20 +1934,9 @@
 
                     content = shapeName;
                     icon = shapeIcon;
-                    // Convert size to label
-                    let sizeLabel = ann.size + 'px';
-                    if (ann.size === 8) sizeLabel = '小';
-                    if (ann.size === 12) sizeLabel = '中';
-                    if (ann.size === 16) sizeLabel = '大';
-                    details = `サイズ: ${sizeLabel}`;
                 } else if (ann.type === 'text') {
                     content = ann.text || '(空のテキスト)';
                     icon = 'T';
-                    let sizeLabel = ann.size + 'px';
-                    if (ann.size === 8) sizeLabel = '小';
-                    if (ann.size === 12) sizeLabel = '中';
-                    if (ann.size === 16) sizeLabel = '大';
-                    details = `サイズ: ${sizeLabel}`;
                 } else if (ann.type === 'highlight') {
                     content = ann.comment || 'ハイライト';
                     icon = 'H';
@@ -2118,8 +2055,6 @@
             link.download = `annotations_${Date.now()}.csv`;
             link.click();
         }
-
-        // --- PDF Download (Merge) ---
 
         // --- PDF Download (Print) ---
 
