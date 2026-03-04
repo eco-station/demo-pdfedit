@@ -613,6 +613,80 @@
             background-color: #333;
         }
 
+        /* Text Input Panel (Sidebar) */
+        #text-input-panel {
+            border-bottom: 2px solid var(--primary-color);
+            background-color: #eef4ff;
+            padding: 10px 12px;
+            animation: slideDown 0.15s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        #text-input-label {
+            font-size: 0.8rem;
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        #sidebar-text-input {
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 1rem;
+            padding: 6px 8px;
+            border: 1px solid var(--primary-color);
+            border-radius: 4px;
+            outline: none;
+            font-family: inherit;
+        }
+
+        #text-input-buttons {
+            display: flex;
+            gap: 6px;
+            margin-top: 6px;
+            justify-content: flex-end;
+        }
+
+        #text-input-confirm {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        #text-input-confirm:hover {
+            background-color: #357abd;
+        }
+
+        #text-input-cancel {
+            background-color: white;
+            border: 1px solid var(--border-color);
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        /* Pin Marker */
+        .pin-marker {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 10px solid;
+            transform: translate(-50%, -100%);
+            pointer-events: none;
+            z-index: 50;
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+        }
+
         /* Print Styles */
         @media print {
             @page {
@@ -722,6 +796,14 @@
         </div>
 
         <aside id="sidebar">
+            <div id="text-input-panel" style="display:none;">
+                <div id="text-input-label">📍 テキストを入力してください</div>
+                <input type="text" id="sidebar-text-input" placeholder="入力 → Enterで確定" autocomplete="off">
+                <div id="text-input-buttons">
+                    <button id="text-input-confirm">確定</button>
+                    <button id="text-input-cancel">キャンセル</button>
+                </div>
+            </div>
             <div class="sidebar-header">
                 コメント一覧
                 <button id="export-csv" title="CSVエクスポート">CSV</button>
@@ -748,9 +830,9 @@
         <div class="control-group">
             <div class="control-item">
                 <span style="font-weight:bold;">モード:</span>
-                <label class="radio-label"><input type="radio" name="mode" value="point" checked> 点</label>
+                <label class="radio-label"><input type="radio" name="mode" value="point"> 点</label>
                 <label class="radio-label"><input type="radio" name="mode" value="text"> テキスト</label>
-                <label class="radio-label"><input type="radio" name="mode" value="marubatsu"> マルバツ</label>
+                <label class="radio-label"><input type="radio" name="mode" value="marubatsu" checked> マルバツ</label>
                 <!-- <label class="radio-label"><input type="radio" name="mode" value="highlight"> ハイライト</label>
                 <label class="radio-label"><input type="radio" name="mode" value="whiteout"> 白塗り</label>
                 <label class="radio-label"><input type="radio" name="mode" value="stamp"> スタンプ</label>
@@ -847,7 +929,7 @@
             undoStack: [],
             redoStack: [],
             selectedAnnotationId: null,
-            mode: 'point', // point, text, marubatsu, highlight, stamp
+            mode: 'marubatsu', // point, text, marubatsu, highlight, stamp
             dragStart: null, // {x, y} for highlight dragging
             currentSettings: {
                 color: 'blue',
@@ -864,7 +946,8 @@
             isDragging: false,
             draggedAnnotationId: null,
             dragOffset: { x: 0, y: 0 },
-            editingId: null // Track which annotation is being edited
+            editingId: null, // Track which annotation is being edited
+            pendingTextPin: null  // { x, y, xPct, yPct } — 未確定のテキストピン位置
         };
 
         // DOM Elements
@@ -981,6 +1064,7 @@
         });
 
         function updateUIForMode() {
+            cancelPendingPin();
             stampControls.style.display = 'none';
             styleControls.style.display = 'none';
             imageControls.style.display = 'none';
@@ -1061,6 +1145,11 @@
 
         document.querySelectorAll('input[name="color"]').forEach(r => r.addEventListener('change', e => {
             state.currentSettings.color = e.target.value;
+
+            // ピン待機中なら色を更新
+            if (state.pendingTextPin) {
+                renderPinMarker();
+            }
 
             // If editing, update the input box immediately
             if (state.editingId) {
@@ -1450,7 +1539,16 @@
                 } else if (state.mode === 'marubatsu') {
                     showMarubatsuPicker(x, y);
                 } else if (state.mode === 'text') {
-                    showTextInput(x, y);
+                    // 既存の未確定ピンをキャンセルして新しいピンをセット
+                    cancelPendingPin();
+                    const layerRect = annotationLayer.getBoundingClientRect();
+                    state.pendingTextPin = {
+                        x, y,
+                        xPct: x / layerRect.width,
+                        yPct: y / layerRect.height
+                    };
+                    renderPinMarker();
+                    showTextInputPanel();
                 } else if (state.mode === 'stamp') {
                     addAnnotation({
                         type: 'stamp',
@@ -1663,6 +1761,75 @@
             annotationLayer.appendChild(wrapper);
             input.focus();
         }
+
+        // --- Text Pin (Sidebar Input) ---
+
+        function renderPinMarker() {
+            const existing = document.querySelector('.pin-marker');
+            if (existing) existing.remove();
+            if (!state.pendingTextPin) return;
+
+            const pin = document.createElement('div');
+            pin.className = 'pin-marker';
+            pin.style.left = `${state.pendingTextPin.x}px`;
+            pin.style.top  = `${state.pendingTextPin.y}px`;
+
+            const color = state.currentSettings.color;
+            if (color === 'blue')       pin.style.borderTopColor = 'var(--blue-color)';
+            else if (color === 'red')   pin.style.borderTopColor = 'var(--red-color)';
+            else                        pin.style.borderTopColor = '#333';
+
+            annotationLayer.appendChild(pin);
+        }
+
+        function showTextInputPanel() {
+            const panel = document.getElementById('text-input-panel');
+            const input = document.getElementById('sidebar-text-input');
+            input.value = '';
+            panel.style.display = 'block';
+            setTimeout(() => input.focus(), 50);
+        }
+
+        function cancelPendingPin() {
+            state.pendingTextPin = null;
+            const existing = document.querySelector('.pin-marker');
+            if (existing) existing.remove();
+            const panel = document.getElementById('text-input-panel');
+            if (panel) panel.style.display = 'none';
+            const input = document.getElementById('sidebar-text-input');
+            if (input) input.value = '';
+        }
+
+        function confirmPendingPin() {
+            const input = document.getElementById('sidebar-text-input');
+            const text = input.value.trim();
+
+            if (text && state.pendingTextPin) {
+                addAnnotation({
+                    type: 'text',
+                    x: state.pendingTextPin.x,
+                    y: state.pendingTextPin.y,
+                    text: text,
+                    color: state.currentSettings.color,
+                    size: state.currentSettings.textSize,
+                    font: state.currentSettings.font
+                });
+            }
+
+            cancelPendingPin();
+        }
+
+        // サイドバー入力パネルのボタン・キーボード
+        document.getElementById('text-input-confirm').addEventListener('click', confirmPendingPin);
+        document.getElementById('text-input-cancel').addEventListener('click', cancelPendingPin);
+        document.getElementById('sidebar-text-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.isComposing) {
+                e.preventDefault();
+                confirmPendingPin();
+            } else if (e.key === 'Escape') {
+                cancelPendingPin();
+            }
+        });
 
         function showMarubatsuPicker(x, y) {
             // Remove any existing picker
@@ -1905,6 +2072,11 @@
 
                     annotationLayer.appendChild(el);
                 });
+
+                // ピンマーカーを最前面に再描画
+                if (state.pendingTextPin) {
+                    renderPinMarker();
+                }
             } catch (e) {
                 console.error('Fatal error in renderAnnotations:', e);
             }
