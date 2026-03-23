@@ -369,6 +369,20 @@
             color: #333;
         }
 
+        .dot.question {
+            background-color: transparent !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .dot.question.blue { color: var(--blue-color); }
+        .dot.question.red  { color: var(--red-color); }
+        .dot.question.black { color: #333; }
+
         /* Text Annotation */
         .text-annotation {
             background: transparent;
@@ -46775,7 +46789,8 @@
 
             const options = [
                 { label: '○', shape: 'circle' },
-                { label: '×', shape: 'cross' }
+                { label: '×', shape: 'cross' },
+                { label: '？', shape: 'question' }
             ];
 
             options.forEach(opt => {
@@ -46928,11 +46943,13 @@
 
                         // Size is determined by shape, not by ann.size
                         let displaySize;
-                        if (ann.shape === 'circle' || ann.shape === 'cross') {
+                        if (ann.shape === 'circle' || ann.shape === 'cross' || ann.shape === 'question') {
                             displaySize = 26;
                         } else {
                             displaySize = 8; // dot
                         }
+
+                        if (ann.shape === 'question') el.textContent = '？';
                         el.style.width = `${displaySize}px`;
                         el.style.height = `${displaySize}px`;
 
@@ -47033,8 +47050,9 @@
                     const shape = ann.shape || 'dot';
                     let shapeIcon = '●';
                     let shapeName = '点';
-                    if (shape === 'circle') { shapeIcon = '○'; shapeName = '円'; }
-                    if (shape === 'cross') { shapeIcon = '×'; shapeName = 'バツ'; }
+                    if (shape === 'circle')   { shapeIcon = '○'; shapeName = '円'; }
+                    if (shape === 'cross')    { shapeIcon = '×'; shapeName = 'バツ'; }
+                    if (shape === 'question') { shapeIcon = '？'; shapeName = '？'; }
 
                     content = shapeName;
                     icon = shapeIcon;
