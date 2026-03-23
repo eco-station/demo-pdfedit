@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>PDF注釈ツール</title>
     <style>
         /* Google Fonts @import removed for offline (file://) support.
@@ -22,6 +22,11 @@
             --sidebar-width: 300px;
         }
 
+        /* Prevent double-tap zoom and 300ms tap delay on all touch devices */
+        html {
+            touch-action: manipulation;
+        }
+
         body {
             font-family: "Noto Sans JP", "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
             margin: 0;
@@ -31,12 +36,15 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            height: 100dvh; /* iOS Safari: respects browser chrome */
             overflow: hidden;
         }
 
         header {
             background-color: #fff;
             padding: 1rem 2rem;
+            padding-left: max(2rem, env(safe-area-inset-left));
+            padding-right: max(2rem, env(safe-area-inset-right));
             border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
@@ -149,6 +157,7 @@
             cursor: crosshair !important;
             background-color: transparent;
             /* Ensure transparent */
+            touch-action: none; /* Prevent browser scroll/zoom interfering with annotation placement */
         }
 
         /* Sidebar */
@@ -513,6 +522,9 @@
         footer {
             background-color: #fff;
             padding: 5px 20px;
+            padding-left: max(20px, env(safe-area-inset-left));
+            padding-right: max(20px, env(safe-area-inset-right));
+            padding-bottom: max(5px, env(safe-area-inset-bottom));
             border-top: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
@@ -688,6 +700,14 @@
             filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
         }
 
+        /* Zoom Controls */
+        #zoom-level-display {
+            min-width: 38px;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #555;
+        }
+
         /* ===== Responsive / Tablet (max-width: 1024px) ===== */
 
         /* Sidebar overlay backdrop */
@@ -729,11 +749,14 @@
             }
             #sidebar.sidebar-open { transform: translateX(0); }
 
-            /* Footer: allow wrapping */
+            /* Footer: allow wrapping, safe area */
             footer {
                 height: auto;
                 min-height: 56px;
                 padding: 6px 10px;
+                padding-left: max(10px, env(safe-area-inset-left));
+                padding-right: max(10px, env(safe-area-inset-right));
+                padding-bottom: max(6px, env(safe-area-inset-bottom));
                 flex-wrap: wrap;
                 gap: 4px;
             }
@@ -45637,10 +45660,10 @@
 <body>
 
     <div id="drop-zone">
-        <p>ここにPDFをドラッグ&ドロップしてください</p>
+        <p id="drop-zone-msg">ここにPDFをドラッグ&ドロップしてください</p>
         <p>または</p>
         <label class="file-input-label">
-            ファイルを選択
+            PDFファイルを選択
             <input type="file" id="file-input" accept=".pdf,application/pdf">
         </label>
         <p id="load-status" style="font-size:0.85rem;color:#e74c3c;margin-top:8px;display:none;"></p>
@@ -45687,6 +45710,12 @@
             <div class="control-item">
                 <button id="undo-btn" title="元に戻す">↶</button>
                 <button id="redo-btn" title="やり直す">↷</button>
+            </div>
+            <div class="control-item">
+                <button id="zoom-out-btn" title="縮小">－</button>
+                <span id="zoom-level-display">100%</span>
+                <button id="zoom-in-btn" title="拡大">＋</button>
+                <button id="zoom-fit-btn" title="幅に合わせる" style="font-size:0.75rem;">幅合</button>
             </div>
             <div class="control-item">
                 <button id="prev-page">◀</button>
@@ -45800,6 +45829,7 @@
             pageRendering: false,
             pageNumPending: null,
             scale: 1.0,
+            zoomFactor: 1.0,
             annotations: [], // { id, type, pageNumber, x, y, width, height, color, size, category, text/comment, stampType, font }
             undoStack: [],
             redoStack: [],
@@ -46167,8 +46197,8 @@
             state.pdfDoc.getPage(num).then((page) => {
                 const containerWidth = document.getElementById('viewer-container').clientWidth - 40;
                 const unscaledViewport = page.getViewport({ scale: 1 });
-                const scale = containerWidth / unscaledViewport.width;
-                state.scale = scale < 1 ? 1 : scale;
+                const baseScale = containerWidth / unscaledViewport.width;
+                state.scale = Math.max(0.5, baseScale) * state.zoomFactor;
                 const viewport = page.getViewport({ scale: state.scale });
 
                 canvas.height = viewport.height;
@@ -47214,6 +47244,44 @@
                 }
             }
         }, { passive: false });
+
+        // ===== Zoom Controls =====
+        (function () {
+            var zoomInBtn  = document.getElementById('zoom-in-btn');
+            var zoomOutBtn = document.getElementById('zoom-out-btn');
+            var zoomFitBtn = document.getElementById('zoom-fit-btn');
+            var zoomDisplay = document.getElementById('zoom-level-display');
+
+            function updateZoomDisplay() {
+                zoomDisplay.textContent = Math.round(state.zoomFactor * 100) + '%';
+            }
+
+            zoomInBtn.addEventListener('click', function () {
+                state.zoomFactor = Math.min(parseFloat((state.zoomFactor + 0.25).toFixed(2)), 4.0);
+                updateZoomDisplay();
+                if (state.pdfDoc) renderPage(state.pageNum);
+            });
+
+            zoomOutBtn.addEventListener('click', function () {
+                state.zoomFactor = Math.max(parseFloat((state.zoomFactor - 0.25).toFixed(2)), 0.25);
+                updateZoomDisplay();
+                if (state.pdfDoc) renderPage(state.pageNum);
+            });
+
+            zoomFitBtn.addEventListener('click', function () {
+                state.zoomFactor = 1.0;
+                updateZoomDisplay();
+                if (state.pdfDoc) renderPage(state.pageNum);
+            });
+        })();
+
+        // ===== Touch Device: hide drag hint in drop zone =====
+        (function () {
+            if (window.matchMedia('(pointer: coarse)').matches) {
+                var msg = document.getElementById('drop-zone-msg');
+                if (msg) msg.textContent = 'PDFファイルを選択してください';
+            }
+        })();
 
         // ===== Sidebar Toggle (Tablet) =====
 
