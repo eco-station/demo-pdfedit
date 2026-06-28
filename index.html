@@ -804,6 +804,7 @@
             isDrawing: false,
             currentStroke: null,
             ignoreMouseClickUntil: 0,
+            suppressTouchPanUntil: 0,
             currentSettings: {
                 color: 'black',
                 size: 8,
@@ -1792,6 +1793,7 @@
             _penStartPos = { clientX: e.clientX, clientY: e.clientY };
             _penTarget = e.target;
             _penMoved = false;
+            state.suppressTouchPanUntil = Date.now() + 1000;
             dispatchMouseLike(e.target, 'mousedown', e);
         }, { passive: false });
 
@@ -1801,6 +1803,7 @@
             var dx = e.clientX - _penStartPos.clientX;
             var dy = e.clientY - _penStartPos.clientY;
             if (Math.sqrt(dx * dx + dy * dy) >= 8) _penMoved = true;
+            state.suppressTouchPanUntil = Date.now() + 1000;
             dispatchMouseLike(annotationLayer, 'mousemove', e);
         }, { passive: false });
 
@@ -1816,6 +1819,7 @@
                 });
             }
             state.ignoreMouseClickUntil = Date.now() + 500;
+            state.suppressTouchPanUntil = Date.now() + 500;
             _penStartPos = null;
             _penTarget = null;
             _penMoved = false;
@@ -1824,6 +1828,7 @@
         annotationLayer.addEventListener('pointercancel', function(e) {
             if (e.pointerType !== 'pen') return;
             dispatchMouseLike(annotationLayer, 'mouseup', e);
+            state.suppressTouchPanUntil = Date.now() + 500;
             _penStartPos = null;
             _penTarget = null;
             _penMoved = false;
@@ -1845,6 +1850,7 @@
                     startY: stylus.clientY,
                     moved: false
                 };
+                state.suppressTouchPanUntil = Date.now() + 1000;
                 dispatchMouseLike(e.target, 'mousedown', stylus);
                 return;
             }
@@ -1857,6 +1863,12 @@
                     startZoom: state.zoomFactor,
                     changed: false
                 };
+                return;
+            }
+
+            if (state.isDrawing || Date.now() < state.suppressTouchPanUntil || state.mode === 'draw') {
+                e.preventDefault();
+                _touchGesture = null;
                 return;
             }
 
@@ -1883,11 +1895,17 @@
                 var stylusDx = stylus.clientX - _stylusTouch.startX;
                 var stylusDy = stylus.clientY - _stylusTouch.startY;
                 if (Math.sqrt(stylusDx * stylusDx + stylusDy * stylusDy) >= 8) _stylusTouch.moved = true;
+                state.suppressTouchPanUntil = Date.now() + 1000;
                 dispatchMouseLike(annotationLayer, 'mousemove', stylus);
                 return;
             }
 
             if (!_touchGesture) return;
+            if (state.isDrawing || Date.now() < state.suppressTouchPanUntil || state.mode === 'draw') {
+                e.preventDefault();
+                _touchGesture = null;
+                return;
+            }
             e.preventDefault();
 
             if (e.touches.length >= 2) {
@@ -1933,6 +1951,7 @@
                 }
                 _stylusTouch = null;
                 state.ignoreMouseClickUntil = Date.now() + 500;
+                state.suppressTouchPanUntil = Date.now() + 500;
                 return;
             }
 
@@ -1973,6 +1992,7 @@
             _stylusTouch = null;
             _touchGesture = null;
             state.ignoreMouseClickUntil = Date.now() + 500;
+            state.suppressTouchPanUntil = Date.now() + 500;
         });
 
         var zoomInBtn = document.getElementById('zoom-in-btn');
