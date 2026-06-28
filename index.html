@@ -723,6 +723,7 @@
                 <label class="radio-label"><input type="radio" name="mode" value="text"> テキスト</label>
                 <label class="radio-label"><input type="radio" name="mode" value="marubatsu" checked> マルバツ</label>
                 <label class="radio-label"><input type="radio" name="mode" value="draw"> ペン</label>
+                <label class="radio-label"><input type="radio" name="mode" value="erase"> 消しゴム</label>
             </div>
 
             <div class="control-item" id="image-controls" style="display:none;">
@@ -782,6 +783,7 @@
                         </optgroup>
                     </select>
                 </span>
+                <button type="button" id="show-keyboard-btn" title="キーボードを表示" style="display:none;">⌨</button>
             </div>
 
             <div class="control-item" id="graph-controls">
@@ -814,6 +816,8 @@
             dragStart: null,
             isDrawing: false,
             currentStroke: null,
+            isErasing: false,
+            didErase: false,
             ignoreMouseClickUntil: 0,
             suppressTouchPanUntil: 0,
             currentSettings: {
@@ -859,6 +863,7 @@
         const textSizeControl = document.getElementById('text-size-control');
         const fontSizeInput = document.getElementById('font-size-input');
         const fontSelect = document.getElementById('font-select');
+        const showKeyboardBtn = document.getElementById('show-keyboard-btn');
         const imageInput = document.getElementById('image-input');
 
         var _lastFile = null;
@@ -939,20 +944,23 @@
             stampControls.style.display = 'none';
             styleControls.style.display = 'none';
             imageControls.style.display = 'none';
+            showKeyboardBtn.style.display = 'none';
             if (state.mode === 'stamp') {
                 stampControls.style.display = 'flex';
             } else if (state.mode === 'image') {
                 imageControls.style.display = 'flex';
-            } else if (state.mode === 'highlight' || state.mode === 'whiteout') {
+            } else if (state.mode === 'highlight' || state.mode === 'whiteout' || state.mode === 'erase') {
             } else {
                 styleControls.style.display = 'flex';
                 if (state.mode === 'text') {
                     textSizeControl.style.display = 'inline';
                     fontSelect.style.display = 'inline-block';
+                    showKeyboardBtn.style.display = 'inline-block';
                     fontSizeInput.value = state.currentSettings.textSize;
                 } else {
                     textSizeControl.style.display = 'none';
                     fontSelect.style.display = 'none';
+                    showKeyboardBtn.style.display = 'none';
                 }
             }
         }
@@ -1145,7 +1153,55 @@
             stroke.points.push(point);
         }
 
+        function distanceToSegment(px, py, ax, ay, bx, by) {
+            const dx = bx - ax;
+            const dy = by - ay;
+            if (dx === 0 && dy === 0) return Math.sqrt((px - ax) ** 2 + (py - ay) ** 2);
+            const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
+            const x = ax + t * dx;
+            const y = ay + t * dy;
+            return Math.sqrt((px - x) ** 2 + (py - y) ** 2);
+        }
+
+        function eraseDrawAt(x, y) {
+            const rect = annotationLayer.getBoundingClientRect();
+            if (!rect.width || !rect.height) return false;
+            const eraseRadius = 18;
+            const eraseIds = new Set();
+
+            state.annotations.forEach(ann => {
+                if (ann.pageNumber !== state.pageNum || ann.type !== 'draw' || !ann.points || ann.points.length === 0) return;
+                const pts = ann.points.map(p => ({ x: p.xPct * rect.width, y: p.yPct * rect.height }));
+                let hit = pts.some(p => Math.sqrt((p.x - x) ** 2 + (p.y - y) ** 2) <= eraseRadius);
+                for (let i = 1; !hit && i < pts.length; i++) {
+                    hit = distanceToSegment(x, y, pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y) <= eraseRadius;
+                }
+                if (hit) eraseIds.add(ann.id);
+            });
+
+            if (eraseIds.size > 0) {
+                if (!state.didErase) {
+                    pushState();
+                    state.didErase = true;
+                }
+                state.annotations = state.annotations.filter(ann => !eraseIds.has(ann.id));
+                renderAnnotations();
+                renderSidebar();
+                return true;
+            }
+            return false;
+        }
+
         annotationLayer.addEventListener('mousedown', (e) => {
+            if (state.mode === 'erase') {
+                const p = getLayerPoint(e.clientX, e.clientY);
+                state.isErasing = true;
+                state.didErase = false;
+                eraseDrawAt(p.x, p.y);
+                e.preventDefault();
+                return;
+            }
+
             if (state.mode === 'draw') {
                 const p = getLayerPoint(e.clientX, e.clientY);
                 pushState();
@@ -1204,6 +1260,10 @@
             const rect = annotationLayer.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
+            if (state.isErasing) {
+                eraseDrawAt(x, y);
+                return;
+            }
             if (state.isDrawing && state.currentStroke) {
                 addStrokePoint(state.currentStroke, x, y);
                 renderAnnotations();
@@ -1266,6 +1326,11 @@
         });
 
         annotationLayer.addEventListener('mouseup', (e) => {
+            if (state.isErasing) {
+                state.isErasing = false;
+                state.didErase = false;
+                return;
+            }
             if (state.isDrawing) {
                 if (state.currentStroke && state.currentStroke.points.length < 2) {
                     state.annotations = state.annotations.filter(a => a.id !== state.currentStroke.id);
@@ -1510,6 +1575,30 @@
             cancelPendingPin();
         }
 
+        function ensureTextPinForKeyboard() {
+            if (state.pendingTextPin) return;
+            if (!state.pdfDoc) return;
+            const layerRect = annotationLayer.getBoundingClientRect();
+            const viewerRect = viewerContainer.getBoundingClientRect();
+            const visibleCenterX = Math.min(Math.max((viewerRect.left + viewerRect.width / 2) - layerRect.left, 0), layerRect.width);
+            const visibleCenterY = Math.min(Math.max((viewerRect.top + viewerRect.height / 2) - layerRect.top, 0), layerRect.height);
+            state.pendingTextPin = {
+                x: visibleCenterX,
+                y: visibleCenterY,
+                xPct: visibleCenterX / layerRect.width,
+                yPct: visibleCenterY / layerRect.height
+            };
+            renderPinMarker();
+        }
+
+        function showKeyboardForTextInput() {
+            ensureTextPinForKeyboard();
+            const panel = document.getElementById('text-input-panel');
+            const input = document.getElementById('sidebar-text-input');
+            if (panel) panel.style.display = 'block';
+            focusTextInput(input);
+        }
+
         document.getElementById('text-input-confirm').addEventListener('click', confirmPendingPin);
         document.getElementById('text-input-cancel').addEventListener('pointerdown', () => { state.cancelingTextPin = true; });
         document.getElementById('text-input-cancel').addEventListener('click', cancelPendingPin);
@@ -1525,6 +1614,14 @@
         document.getElementById('sidebar-text-input').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); confirmPendingPin(); }
             else if (e.key === 'Escape') cancelPendingPin();
+        });
+        showKeyboardBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            showKeyboardForTextInput();
+        });
+        showKeyboardBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            showKeyboardForTextInput();
         });
 
         function showMarubatsuPicker(x, y) {
@@ -1570,17 +1667,19 @@
             if (ann) {
                 if (ann.type === 'text') {
                     textSizeControl.style.display = 'inline'; fontSelect.style.display = 'inline-block';
+                    showKeyboardBtn.style.display = 'inline-block';
                     fontSizeInput.value = ann.size || 16; fontSelect.value = ann.font || 'Noto Sans JP';
                     styleControls.style.display = 'flex'; stampControls.style.display = 'none';
                 } else if (ann.type === 'point') {
                     textSizeControl.style.display = 'none'; fontSelect.style.display = 'none';
+                    showKeyboardBtn.style.display = 'none';
                     styleControls.style.display = 'flex'; stampControls.style.display = 'none';
                 } else if (ann.type === 'stamp') {
-                    styleControls.style.display = 'none'; stampControls.style.display = 'flex'; stampTypeSelect.value = ann.stampType;
+                    showKeyboardBtn.style.display = 'none'; styleControls.style.display = 'none'; stampControls.style.display = 'flex'; stampTypeSelect.value = ann.stampType;
                 } else if (ann.type === 'image') {
-                    styleControls.style.display = 'none'; stampControls.style.display = 'none'; imageControls.style.display = 'flex';
+                    showKeyboardBtn.style.display = 'none'; styleControls.style.display = 'none'; stampControls.style.display = 'none'; imageControls.style.display = 'flex';
                 } else {
-                    styleControls.style.display = 'none'; stampControls.style.display = 'none';
+                    showKeyboardBtn.style.display = 'none'; styleControls.style.display = 'none'; stampControls.style.display = 'none';
                 }
             }
             renderAnnotations();
@@ -1912,7 +2011,7 @@
                 return;
             }
 
-            if (state.isDrawing || Date.now() < state.suppressTouchPanUntil || state.mode === 'draw') {
+            if (state.isDrawing || state.isErasing || Date.now() < state.suppressTouchPanUntil || state.mode === 'draw' || state.mode === 'erase') {
                 e.preventDefault();
                 _touchGesture = null;
                 return;
@@ -1947,7 +2046,7 @@
             }
 
             if (!_touchGesture) return;
-            if (state.isDrawing || Date.now() < state.suppressTouchPanUntil || state.mode === 'draw') {
+            if (state.isDrawing || state.isErasing || Date.now() < state.suppressTouchPanUntil || state.mode === 'draw' || state.mode === 'erase') {
                 e.preventDefault();
                 _touchGesture = null;
                 return;
