@@ -520,6 +520,17 @@
             font-family: inherit;
         }
 
+        .pending-text-preview {
+            position: absolute;
+            z-index: 160;
+            font-size: 14px;
+            white-space: nowrap;
+            transform: none;
+            pointer-events: none;
+            user-select: none;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+        }
+
         #text-input-buttons { display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end; }
 
         #text-input-confirm {
@@ -670,7 +681,7 @@
         <aside id="sidebar">
             <div id="text-input-panel" style="display:none;">
                 <div id="text-input-label">📍 テキストを入力してください</div>
-                <input type="text" id="sidebar-text-input" placeholder="入力 → Enterで確定" autocomplete="off">
+                <input type="text" id="sidebar-text-input" placeholder="入力 → Enterで確定" autocomplete="off" inputmode="text" enterkeyhint="done">
                 <div id="text-input-buttons">
                     <button id="text-input-confirm">確定</button>
                     <button id="text-input-cancel">キャンセル</button>
@@ -820,7 +831,8 @@
             draggedAnnotationId: null,
             dragOffset: { x: 0, y: 0 },
             editingId: null,
-            pendingTextPin: null
+            pendingTextPin: null,
+            cancelingTextPin: false
         };
 
         const canvas = document.getElementById('the-canvas');
@@ -1436,6 +1448,26 @@
             else if (color === 'red') pin.style.borderTopColor = 'var(--red-color)';
             else pin.style.borderTopColor = '#333';
             annotationLayer.appendChild(pin);
+            renderPendingTextPreview();
+        }
+
+        function renderPendingTextPreview() {
+            const existing = document.querySelector('.pending-text-preview');
+            if (existing) existing.remove();
+            if (!state.pendingTextPin) return;
+
+            const input = document.getElementById('sidebar-text-input');
+            const text = input ? input.value : '';
+            if (!text) return;
+
+            const preview = document.createElement('div');
+            preview.className = `pending-text-preview text-annotation ${state.currentSettings.color}`;
+            preview.style.left = `${state.pendingTextPin.x}px`;
+            preview.style.top = `${state.pendingTextPin.y}px`;
+            preview.style.fontSize = `${state.currentSettings.textSize}px`;
+            preview.style.fontFamily = state.currentSettings.font;
+            preview.textContent = text;
+            annotationLayer.appendChild(preview);
         }
 
         function focusTextInput(input) {
@@ -1451,6 +1483,7 @@
             const panel = document.getElementById('text-input-panel');
             const input = document.getElementById('sidebar-text-input');
             input.value = '';
+            state.cancelingTextPin = false;
             panel.style.display = 'block';
             focusTextInput(input);
         }
@@ -1459,10 +1492,13 @@
             state.pendingTextPin = null;
             const existing = document.querySelector('.pin-marker');
             if (existing) existing.remove();
+            const preview = document.querySelector('.pending-text-preview');
+            if (preview) preview.remove();
             const panel = document.getElementById('text-input-panel');
             if (panel) panel.style.display = 'none';
             const input = document.getElementById('sidebar-text-input');
             if (input) input.value = '';
+            state.cancelingTextPin = false;
         }
 
         function confirmPendingPin() {
@@ -1475,7 +1511,17 @@
         }
 
         document.getElementById('text-input-confirm').addEventListener('click', confirmPendingPin);
+        document.getElementById('text-input-cancel').addEventListener('pointerdown', () => { state.cancelingTextPin = true; });
         document.getElementById('text-input-cancel').addEventListener('click', cancelPendingPin);
+        document.getElementById('sidebar-text-input').addEventListener('input', renderPendingTextPreview);
+        document.getElementById('sidebar-text-input').addEventListener('blur', () => {
+            setTimeout(() => {
+                const input = document.getElementById('sidebar-text-input');
+                if (!state.cancelingTextPin && state.pendingTextPin && input && input.value.trim()) {
+                    confirmPendingPin();
+                }
+            }, 120);
+        });
         document.getElementById('sidebar-text-input').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); confirmPendingPin(); }
             else if (e.key === 'Escape') cancelPendingPin();
