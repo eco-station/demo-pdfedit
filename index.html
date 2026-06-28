@@ -751,42 +751,8 @@
                 <label class="radio-label"><input type="radio" name="color" value="blue"> <span class="color-sample blue"></span></label>
                 <span id="text-size-control" style="display:none;">
                     <input type="number" id="font-size-input" value="16" min="8" max="100" style="width: 50px; padding: 2px;"> px
-                    <select id="font-select" style="margin-left: 5px; max-width: 150px;">
-                        <optgroup label="ビジネス (ゴシック)">
-                            <option value="Noto Sans JP">Noto Sans JP (標準)</option>
-                            <option value="BIZ UDPGothic">BIZ UDPGothic</option>
-                            <option value="BIZ UDGothic">BIZ UDGothic</option>
-                            <option value="Sawarabi Gothic">さわらびゴシック</option>
-                            <option value="M PLUS 1p">M PLUS 1p</option>
-                            <option value="Zen Kaku Gothic New">Zen 角ゴシック</option>
-                            <option value="IBM Plex Sans JP">IBM Plex Sans JP</option>
-                        </optgroup>
-                        <optgroup label="ビジネス (明朝)">
-                            <option value="Noto Serif JP">Noto Serif JP (標準)</option>
-                            <option value="BIZ UDPMincho">BIZ UDPMincho</option>
-                            <option value="BIZ UDMincho">BIZ UDMincho</option>
-                            <option value="Sawarabi Mincho">さわらび明朝</option>
-                            <option value="Zen Old Mincho">Zen オールド明朝</option>
-                            <option value="Shippori Mincho">しっぽり明朝</option>
-                        </optgroup>
-                        <optgroup label="モダン・丸文字">
-                            <option value="Klee One">Klee One (教科書体)</option>
-                            <option value="Kosugi">Kosugi</option>
-                            <option value="Zen Maru Gothic">Zen 丸ゴシック</option>
-                            <option value="Kosugi Maru">Kosugi Maru</option>
-                            <option value="Kiwi Maru">キウイ丸</option>
-                        </optgroup>
-                        <optgroup label="手書き・ポップ・デザイン">
-                            <option value="Yomogi">Yomogi (手書き)</option>
-                            <option value="Hachi Maru Pop">ハチまるポップ</option>
-                            <option value="RocknRoll One">RocknRoll One</option>
-                            <option value="DotGothic16">ドットゴシック</option>
-                            <option value="Rampart One">Rampart One (極太)</option>
-                            <option value="Reggae One">Reggae One</option>
-                        </optgroup>
-                    </select>
                 </span>
-                <button type="button" id="show-keyboard-btn" title="キーボードを表示" style="display:none;">⌨</button>
+                <label id="show-keyboard-btn" for="sidebar-text-input" title="キーボードを表示" style="display:none; cursor:pointer; padding:4px 8px; border:1px solid var(--border-color); border-radius:4px; background:#fff;">⌨</label>
             </div>
 
             <div class="control-item" id="graph-controls">
@@ -865,7 +831,6 @@
         const graphModeCheckbox = document.getElementById('graph-mode-chk');
         const textSizeControl = document.getElementById('text-size-control');
         const fontSizeInput = document.getElementById('font-size-input');
-        const fontSelect = document.getElementById('font-select');
         const showKeyboardBtn = document.getElementById('show-keyboard-btn');
         const imageInput = document.getElementById('image-input');
 
@@ -957,12 +922,10 @@
                 styleControls.style.display = 'flex';
                 if (state.mode === 'text') {
                     textSizeControl.style.display = 'inline';
-                    fontSelect.style.display = 'inline-block';
                     showKeyboardBtn.style.display = 'inline-block';
                     fontSizeInput.value = state.currentSettings.textSize;
                 } else {
                     textSizeControl.style.display = 'none';
-                    fontSelect.style.display = 'none';
                     showKeyboardBtn.style.display = 'none';
                 }
             }
@@ -982,21 +945,6 @@
                     const ann = state.annotations.find(a => a.id === state.selectedAnnotationId);
                     if (ann && ann.type === 'text') { ann.size = newSize; renderAnnotations(); }
                 }
-            }
-        });
-
-        fontSelect.addEventListener('change', (e) => {
-            const newFont = e.target.value;
-            state.currentSettings.font = newFont;
-            if (state.editingId) {
-                const input = document.querySelector('.annotation-input');
-                if (input) input.style.fontFamily = newFont;
-                const ann = state.annotations.find(a => a.id === state.editingId);
-                if (ann) ann.font = newFont;
-            }
-            if (state.selectedAnnotationId) {
-                const ann = state.annotations.find(a => a.id === state.selectedAnnotationId);
-                if (ann && ann.type === 'text') { ann.font = newFont; renderAnnotations(); }
             }
         });
 
@@ -1540,11 +1488,16 @@
 
         function focusTextInput(input) {
             if (!input) return;
+            input.readOnly = false;
             try {
                 input.focus({ preventScroll: true });
             } catch (err) {
                 input.focus();
             }
+            try {
+                const len = input.value.length;
+                input.setSelectionRange(len, len);
+            } catch (err) {}
         }
 
         function showTextInputPanel() {
@@ -1618,12 +1571,16 @@
             if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); confirmPendingPin(); }
             else if (e.key === 'Escape') cancelPendingPin();
         });
-        showKeyboardBtn.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
+        showKeyboardBtn.addEventListener('touchstart', () => {
+            showKeyboardForTextInput();
+        }, { passive: true });
+        showKeyboardBtn.addEventListener('touchend', () => {
+            showKeyboardForTextInput();
+        }, { passive: true });
+        showKeyboardBtn.addEventListener('pointerdown', () => {
             showKeyboardForTextInput();
         });
-        showKeyboardBtn.addEventListener('click', (e) => {
-            e.preventDefault();
+        showKeyboardBtn.addEventListener('click', () => {
             showKeyboardForTextInput();
         });
 
@@ -1686,12 +1643,12 @@
             const ann = state.annotations.find(a => a.id === id);
             if (ann) {
                 if (ann.type === 'text') {
-                    textSizeControl.style.display = 'inline'; fontSelect.style.display = 'inline-block';
+                    textSizeControl.style.display = 'inline';
                     showKeyboardBtn.style.display = 'inline-block';
-                    fontSizeInput.value = ann.size || 16; fontSelect.value = ann.font || 'Noto Sans JP';
+                    fontSizeInput.value = ann.size || 16;
                     styleControls.style.display = 'flex'; stampControls.style.display = 'none';
                 } else if (ann.type === 'point') {
-                    textSizeControl.style.display = 'none'; fontSelect.style.display = 'none';
+                    textSizeControl.style.display = 'none';
                     showKeyboardBtn.style.display = 'none';
                     styleControls.style.display = 'flex'; stampControls.style.display = 'none';
                 } else if (ann.type === 'stamp') {
