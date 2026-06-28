@@ -395,6 +395,8 @@
             padding: 4px 6px;
             box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
             transform: translate(-50%, -120%);
+            pointer-events: auto;
+            touch-action: manipulation;
         }
 
         .point-picker-item {
@@ -408,6 +410,7 @@
             border-radius: 4px;
             transition: background-color 0.15s;
             user-select: none;
+            touch-action: manipulation;
         }
 
         .point-picker-item:hover { background-color: #e6f0ff; }
@@ -1639,18 +1642,35 @@
                 const item = document.createElement('div');
                 item.className = 'point-picker-item';
                 item.textContent = opt.label;
-                item.addEventListener('click', (e) => {
+                let picked = false;
+                const pick = (e) => {
+                    if (picked) return;
+                    picked = true;
+                    e.preventDefault();
                     e.stopPropagation();
                     addAnnotation({ type: 'point', x, y, color: state.currentSettings.color, size: 26, shape: opt.shape, comment: '' });
                     picker.remove();
-                });
+                };
+                item.addEventListener('pointerdown', pick, { passive: false });
+                item.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: false });
+                item.addEventListener('touchend', pick, { passive: false });
+                item.addEventListener('click', pick);
                 picker.appendChild(item);
             });
             annotationLayer.appendChild(picker);
             const closePicker = (e) => {
-                if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('mousedown', closePicker); }
+                if (!picker.contains(e.target)) {
+                    picker.remove();
+                    document.removeEventListener('mousedown', closePicker);
+                    document.removeEventListener('pointerdown', closePicker);
+                    document.removeEventListener('touchstart', closePicker);
+                }
             };
-            setTimeout(() => document.addEventListener('mousedown', closePicker), 0);
+            setTimeout(() => {
+                document.addEventListener('mousedown', closePicker);
+                document.addEventListener('pointerdown', closePicker);
+                document.addEventListener('touchstart', closePicker);
+            }, 0);
         }
 
         function deleteAnnotation(id) {
